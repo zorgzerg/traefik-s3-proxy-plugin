@@ -1,0 +1,10 @@
+displayName: S3
+type: middleware
+
+import: github.com/zorgzerg/traefik-s3-proxy-plugin
+
+summary: Pull data from S3 compatible storage
+
+testData:
+  service: local
+  directory: aws-local-directory

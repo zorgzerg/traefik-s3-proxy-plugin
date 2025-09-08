@@ -1,0 +1,12 @@
+api:
+  dashboard: true
+  insecure: true
+
+providers:
+  docker:
+    exposedByDefault: false
+
+experimental:
+  localPlugins:
+    traefik-s3-proxy-plugin:
+      moduleName: github.com/zorgzerg/traefik-s3-proxy-plugin

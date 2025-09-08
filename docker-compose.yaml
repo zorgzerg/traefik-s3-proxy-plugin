@@ -1,0 +1,28 @@
+services:
+  traefik:
+    image: traefik:v3.0
+    ports:
+      # HTTP
+      - "80:80"
+      # Web UI, enabled by --api.insecure=true
+      - "8080:8080"
+    privileged: true
+    working_dir: /app
+    volumes:
+      # So that Traefik can listen to the Docker events
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Default location
+      - ./traefik.yml:/etc/traefik/traefik.yml
+      # Plugin sources
+      - .:/app/plugins-local/src/github.com/zorgzerg/traefik-s3-proxy-plugin/
+      # Local directory
+      - ./storage:/app/aws-local-directory
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.my-router.service=noop@internal
+      - traefik.http.routers.my-router.rule=Host(`traefik.docker.localhost`)
+      - traefik.http.routers.my-router.middlewares=add-index-suffix,my-s3
+      - traefik.http.middlewares.add-index-suffix.replacePathRegex.regex=^(.*/)$$
+      - traefik.http.middlewares.add-index-suffix.replacePathRegex.replacement=$${1}index.html
+      - traefik.http.middlewares.my-s3.plugin.traefik-s3-proxy-plugin.service=local
+      - traefik.http.middlewares.my-s3.plugin.traefik-s3-proxy-plugin.directory=aws-local-directory

@@ -1,4 +1,5 @@
-displayName: S3
+displayName: s3-proxy
+
 type: middleware
 
 import: github.com/zorgzerg/traefik-s3-proxy-plugin

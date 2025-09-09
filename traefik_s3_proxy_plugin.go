@@ -1,4 +1,4 @@
-package traefik_s3_plugin
+package traefik_s3_proxy_plugin
 
 import (
 	"context"

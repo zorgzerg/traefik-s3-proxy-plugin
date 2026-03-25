@@ -15,7 +15,7 @@ import (
 )
 
 func generatePresignedURL(accessKeyID, secretAccessKey, region, endpoint, bucket, linkStyle, key string) (string, error) {
-	escapedKey := url.PathEscape(key)
+	escapedKey := escapeS3ObjectKey(key)
 
 	var host, canonicalURI string
 
@@ -91,6 +91,14 @@ func generatePresignedURL(accessKeyID, secretAccessKey, region, endpoint, bucket
 	finalURL := fmt.Sprintf("https://%s%s?%s", host, canonicalURI, query.Encode())
 
 	return finalURL, nil
+}
+
+func escapeS3ObjectKey(key string) string {
+	parts := strings.Split(key, "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
 }
 
 // Helper function to create the HMAC-SHA256 hash

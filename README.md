@@ -4,6 +4,10 @@ This plugin is based on [craigbrogle/traefik-s3-plugin](https://github.com/craig
 
 ## Changelog
 
+### s3-proxy 1.1.0
+
+- Fixed incorrect handling of object keys containing `/`
+
 ### s3-proxy 1.0.0
 
 - The code has been improved

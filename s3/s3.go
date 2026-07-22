@@ -94,11 +94,30 @@ func generatePresignedURL(accessKeyID, secretAccessKey, region, endpoint, bucket
 }
 
 func escapeS3ObjectKey(key string) string {
-	parts := strings.Split(key, "/")
-	for i, part := range parts {
-		parts[i] = url.PathEscape(part)
+	var b strings.Builder
+	b.Grow(len(key) * 3)
+
+	for i := 0; i < len(key); i++ {
+		c := key[i]
+
+		if c == '/' || isUnreserved(c) {
+			b.WriteByte(c)
+			continue
+		}
+
+		b.WriteByte('%')
+		b.WriteByte("0123456789ABCDEF"[c>>4])
+		b.WriteByte("0123456789ABCDEF"[c&0x0F])
 	}
-	return strings.Join(parts, "/")
+
+	return b.String()
+}
+
+func isUnreserved(c byte) bool {
+	return ('A' <= c && c <= 'Z') ||
+		('a' <= c && c <= 'z') ||
+		('0' <= c && c <= '9') ||
+		c == '-' || c == '.' || c == '_' || c == '~'
 }
 
 // Helper function to create the HMAC-SHA256 hash
@@ -176,7 +195,9 @@ func (s *S3) Get(path string, rw http.ResponseWriter) ([]byte, error) {
 	}
 
 	rw.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-	rw.Header().Set("Content-Length", resp.Header.Get("Content-Length"))
+	if contentLength := resp.Header.Get("Content-Length"); contentLength != "" {
+		rw.Header().Set("Content-Length", contentLength)
+	}
 
 	response, err := io.ReadAll(resp.Body)
 	return response, err

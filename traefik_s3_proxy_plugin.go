@@ -12,7 +12,7 @@ import (
 )
 
 type Service interface {
-	Get(name string, rw http.ResponseWriter) ([]byte, error)
+	Get(ctx context.Context, name, origin string, rw http.ResponseWriter) ([]byte, error)
 }
 
 type Config struct {
@@ -86,21 +86,26 @@ func (plugin S3Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	default:
 		http.Error(rw, fmt.Sprintf("Method %s not implemented", req.Method), http.StatusNotImplemented)
 	}
-	plugin.next.ServeHTTP(rw, req)
 }
 
 func (plugin *S3Plugin) get(rw http.ResponseWriter, req *http.Request) {
-	resp, err := plugin.service.Get(req.URL.Path[1:], rw)
+	name := req.URL.Path
+	if len(name) > 0 && name[0] == '/' {
+		name = name[1:]
+	}
+
+	resp, err := plugin.service.Get(req.Context(), name, req.Header.Get("Origin"), rw)
 
 	if err != nil {
-		rw.WriteHeader(http.StatusInternalServerError)
-		http.Error(rw, fmt.Sprintf("Put error: %s", err.Error()), http.StatusInternalServerError)
-		log.Error(err.Error())
+		// The service writes a suitable, sanitized HTTP error. In particular, do
+		// not log errors returned by an HTTP client: they can contain a presigned
+		// URL and its credentials.
+		log.Error("unable to serve object")
 		return
 	}
 	rw.WriteHeader(http.StatusOK)
 	_, writeError := rw.Write(resp)
 	if writeError != nil {
-		http.Error(rw, string(resp)+writeError.Error(), http.StatusBadGateway)
+		log.Error("unable to write object response")
 	}
 }

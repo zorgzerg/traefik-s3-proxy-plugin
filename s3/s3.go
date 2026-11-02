@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,6 +14,16 @@ import (
 	"strings"
 	"time"
 )
+
+var corsResponseHeaders = []string{
+	"Access-Control-Allow-Origin",
+	"Access-Control-Allow-Methods",
+	"Access-Control-Allow-Headers",
+	"Access-Control-Expose-Headers",
+	"Access-Control-Max-Age",
+	"Access-Control-Allow-Credentials",
+	"Vary",
+}
 
 func generatePresignedURL(accessKeyID, secretAccessKey, region, endpoint, bucket, linkStyle, key string) (string, error) {
 	escapedKey := escapeS3ObjectKey(key)
@@ -156,6 +167,7 @@ type S3 struct {
 	prefix          string
 	linkStyle       string
 	timeoutSeconds  int
+	client          *http.Client
 }
 
 func New(accessKeyID, secretAccessKey, endpoint, region, bucket, prefix, linkStyle string, timeoutSeconds int) *S3 {
@@ -168,37 +180,68 @@ func New(accessKeyID, secretAccessKey, endpoint, region, bucket, prefix, linkSty
 		prefix:          prefix,
 		linkStyle:       linkStyle,
 		timeoutSeconds:  timeoutSeconds,
+		client: &http.Client{
+			Timeout: time.Duration(timeoutSeconds) * time.Second,
+		},
 	}
 }
 
 // Get fetches the object from S3 and writes it to the response writer.
-func (s *S3) Get(path string, rw http.ResponseWriter) ([]byte, error) {
+func (s *S3) Get(ctx context.Context, path, origin string, rw http.ResponseWriter) ([]byte, error) {
 	key := s.prefix + path
 
 	urlStr, err := generatePresignedURL(s.accessKeyID, s.secretAccessKey, s.region, s.endpoint, s.bucket, s.linkStyle, key)
 	if err != nil {
-		http.Error(rw, fmt.Sprintf("unable to generate presigned URL, %v", err), http.StatusInternalServerError)
+		http.Error(rw, "unable to generate presigned URL", http.StatusInternalServerError)
 		return nil, err
 	}
 
-	resp, err := http.Get(urlStr)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
-		http.Error(rw, fmt.Sprintf("unable to fetch object from S3, %v", err), http.StatusInternalServerError)
-		return nil, err
+		http.Error(rw, "unable to create S3 request", http.StatusInternalServerError)
+		return nil, errors.New("unable to create S3 request")
+	}
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		http.Error(rw, "unable to fetch object from S3", http.StatusInternalServerError)
+		return nil, errors.New("unable to fetch object from S3")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		http.Error(rw, string(body), resp.StatusCode)
+		http.Error(rw, http.StatusText(resp.StatusCode), resp.StatusCode)
 		return nil, errors.New("failed to fetch object from S3")
+	}
+
+	response, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(rw, "unable to read object from S3", http.StatusBadGateway)
+		return nil, errors.New("unable to read object from S3")
 	}
 
 	rw.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 	if contentLength := resp.Header.Get("Content-Length"); contentLength != "" {
 		rw.Header().Set("Content-Length", contentLength)
 	}
+	copyResponseHeaders(rw.Header(), resp.Header, corsResponseHeaders)
 
-	response, err := io.ReadAll(resp.Body)
-	return response, err
+	return response, nil
+}
+
+func copyResponseHeaders(dst, src http.Header, names []string) {
+	for _, name := range names {
+		values := src.Values(name)
+		if len(values) == 0 {
+			continue
+		}
+
+		dst.Del(name)
+		for _, value := range values {
+			dst.Add(name, value)
+		}
+	}
 }

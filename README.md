@@ -4,6 +4,10 @@ This plugin is based on [craigbrogle/traefik-s3-plugin](https://github.com/craig
 
 ## Changelog
 
+### s3-proxy 1.2.1
+
+- For virtual-hosted S3 requests, connect to the configured endpoint while preserving the signed bucket hostname in the HTTP `Host` header. This enables S3 CORS for bucket names containing dots without breaking TLS certificate verification.
+
 ### s3-proxy 1.1.1
 
 - Fixed AWS SigV4 object key escaping for reserved characters in paths (`$`, `&`, `:`, `;`, `=`, `@`, `+`) to prevent `SignatureDoesNotMatch` with S3-compatible backends (including Yandex Object Storage).

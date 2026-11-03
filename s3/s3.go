@@ -196,10 +196,29 @@ func (s *S3) Get(ctx context.Context, path, origin string, rw http.ResponseWrite
 		return nil, err
 	}
 
+	requestHost := ""
+	if s.linkStyle == "vhost" {
+		// Sign and send the virtual-hosted bucket name in the HTTP Host header so
+		// S3 applies features that require vhost addressing, including CORS. Dial
+		// the endpoint itself so TLS verification also works for bucket names
+		// containing dots, which are not covered by the endpoint wildcard cert.
+		requestURL, parseErr := url.Parse(urlStr)
+		if parseErr != nil {
+			http.Error(rw, "unable to create S3 request", http.StatusInternalServerError)
+			return nil, errors.New("unable to create S3 request")
+		}
+		requestHost = requestURL.Host
+		requestURL.Host = s.endpoint
+		urlStr = requestURL.String()
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
 		http.Error(rw, "unable to create S3 request", http.StatusInternalServerError)
 		return nil, errors.New("unable to create S3 request")
+	}
+	if requestHost != "" {
+		req.Host = requestHost
 	}
 	if origin != "" {
 		req.Header.Set("Origin", origin)
